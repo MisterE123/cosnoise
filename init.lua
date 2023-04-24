@@ -195,7 +195,7 @@ function cosnoise.create(wavelengths,seed)
 
         end
 
-        val = val / max
+        val = val / (max*dims)
         return val
     end
     return noise
