@@ -69,30 +69,56 @@ local function create_2d_rotations(qty)
     return randomize_list(mats)
 end
 
-local function create_3d_rotations(qty)
-    local mats = {}
-    local spacing = math.pi * (3 - math.sqrt(5)) -- golden angle
-    local max_offset = spacing / 3
-    local offset = function(max)
-        return (math.random() - 0.5) * max
+local function fibonacci_sphere_points(qty)
+    local points = {}
+    local offset = 2 / qty
+    local increment = math.pi * (3 - math.sqrt(5))
+
+    for i = 0, qty - 1 do
+        local y = ((i * offset) - 1) + (offset / 2)
+        local r = math.sqrt(1 - y * y)
+        local phi = ((i + 1) % qty) * increment
+        local x = math.cos(phi) * r
+        local z = math.sin(phi) * r
+        table.insert(points, {x = x, y = y, z = z})
     end
-    local phi = math.pi * (3 - math.sqrt(5)) -- start with golden angle
-    for i = 1, qty do
-        local y = 1 - (i - 1) / (qty - 1) * 2 -- map i to [-1,1]
-        local radius = math.sqrt(1 - y * y)
-        local theta = i * spacing + offset(max_offset)
-        local x = radius * math.cos(theta)
-        local z = radius * math.sin(theta)
-        local mat = {
-            {x * x + (1 - x * x) * math.cos(phi), x * y * (1 - math.cos(phi)) - z * math.sin(phi), x * z * (1 - math.cos(phi)) + y * math.sin(phi)},
-            {x * y * (1 - math.cos(phi)) + z * math.sin(phi), y * y + (1 - y * y) * math.cos(phi), y * z * (1 - math.cos(phi)) - x * math.sin(phi)},
-            {x * z * (1 - math.cos(phi)) - y * math.sin(phi), y * z * (1 - math.cos(phi)) + x * math.sin(phi), z * z + (1 - z * z) * math.cos(phi)}
-        }
-        table.insert(mats, mat)
-        phi = phi + spacing
-    end
-    return randomize_list(mats)
+
+    return points
 end
+
+local function lookat_to_matrix(point)
+    local eye = {x = 0, y = 0, z = 0}
+    local up = {x = 0, y = 1, z = 0}
+    local z_axis = {x = eye.x - point.x, y = eye.y - point.y, z = eye.z - point.z}
+    local x_axis = {
+        x = up.y * z_axis.z - up.z * z_axis.y,
+        y = up.z * z_axis.x - up.x * z_axis.z,
+        z = up.x * z_axis.y - up.y * z_axis.x
+    }
+    local y_axis = {
+        x = z_axis.y * x_axis.z - z_axis.z * x_axis.y,
+        y = z_axis.z * x_axis.x - z_axis.x * x_axis.z,
+        z = z_axis.x * x_axis.y - z_axis.y * x_axis.x
+    }
+    return {
+        {x_axis.x, y_axis.x, z_axis.x},
+        {x_axis.y, y_axis.y, z_axis.y},
+        {x_axis.z, y_axis.z, z_axis.z}
+    }
+end
+
+local function create_3d_rotations(qty)
+    local points = fibonacci_sphere_points(qty)
+    local mats = {}
+
+    for _, point in ipairs(points) do
+        local mat = lookat_to_matrix(point)
+        table.insert(mats, mat)
+    end
+
+    return mats
+end
+
   
 local function create_offsets(qty)
     local offsets = {}
