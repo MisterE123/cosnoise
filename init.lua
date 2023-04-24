@@ -15,12 +15,13 @@ end
 -- Function to normalize any input angle to the range 0 to 2 * pi
 local function normalize_angle(angle)
     local two_pi = 2 * pi
-    return angle - two_pi * math.floor(angle / two_pi)
+    return angle % two_pi
 end
+
 
 -- Function to find the nearest table index for a given angle
 local function find_nearest_index(angle)
-    return math.floor(normalize_angle(angle) * 1024 / (2 * pi)) % 1024
+    return floor(normalize_angle(angle) * 1024 / (2 * pi)) % 1024
 end
 
 -- Sine function using precomputed table and linear interpolation
@@ -39,6 +40,7 @@ local function cos(angle)
 end
 
 
+
 local function randomize_list(list)
     local idxs = {}
     local newlist = {}
@@ -46,7 +48,7 @@ local function randomize_list(list)
         table.insert(idxs, i)
     end
     for i = 1, #list do 
-        local index_to_remove = math.random(1, #idxs)
+        local index_to_remove = random(1, #idxs)
         local index_to_insert = table.remove(idxs, index_to_remove)
         table.insert(newlist, index_to_insert, list[i])
     end
@@ -72,7 +74,7 @@ end
 local function fibonacci_sphere_points(qty)
     local points = {}
     local offset = 2 / qty
-    local increment = math.pi * (3 - math.sqrt(5))
+    local increment = pi * (3 - math.sqrt(5))
 
     for i = 0, qty - 1 do
         local y = ((i * offset) - 1) + (offset / 2)
@@ -168,7 +170,14 @@ function cosnoise.create(wavelengths,seed)
     for i = 1, #wavelengths do 
         waves[i] = wavelengths[i] * 2 * pi
     end
+    -- precompute inverses to avoid division in the loop
+    local inv_waves = {}
+    for i = 1, #waves do 
+        inv_waves[i] = 1 / waves[i]
+    end
 
+
+    
     -- lets calculate the maximum value. That will be
     max = 0
     for i,v in ipairs(waves) do
@@ -177,7 +186,9 @@ function cosnoise.create(wavelengths,seed)
     -- we will divide the total noise function by max
 
 
-    local dim_lookup = {"x","z","y"}
+    local num_waves = #waves
+    local dim_lookup = { "x", "z", "y" }
+
 
     -- we will assume a minetest-like coordinate system. So, x and z are the
     -- horizantal axes. 1-d noise will look for pos = {x=x_val}. 2-d noise will
@@ -188,42 +199,72 @@ function cosnoise.create(wavelengths,seed)
     -- dimensions to consider; currently supports 1, 2, or 3.
 
     local noise = function(pos, scale, dims)
-
-        -- scale the noise, if needed.
+        -- Scale the noise, if needed.
         if scale ~= 1 then
-            for axis,loc in pairs(pos) do
-                pos[axis]=pos[axis]/scale
+            for axis, loc in pairs(pos) do
+                pos[axis] = pos[axis] / scale
             end
         end
 
         local val = 0
+        local num_waves = #waves
 
-        for i = 1, #waves do
+        if dims == 1 then
+            for i = 1, num_waves do
+                local wavelength = waves[i]
+                local invwavelength = inv_waves[i]
+                local offset = offsets[i]
+                local coord = pos.x
 
-            local wavelength = waves[i]
-
-            for d = 1, dims do
-
-                local offset = offsets[i+d-1]
-                -- rotate coordinates
-                if dims==2 then
-                    pos = rotate_2d(pos,rotations2[i+d-1])
-                end
-                if dims==3 then
-                    pos = rotate_3d(pos,rotations3[i+d-1])
-                end
-                local axis = dim_lookup[d]
-                local coord = pos[axis]
-
-                val = val + wavelength*cos((coord-offset)/wavelength)
-
+                val = val + wavelength * cos((coord - offset) *invwavelength)
             end
+        elseif dims == 2 then
+            for i = 1, num_waves do
+                local wavelength = waves[i]
+                local invwavelength = inv_waves[i]
 
+                -- Rotate coordinates
+                pos = rotate_2d(pos, rotations2[i])
+
+                -- X dimension
+                local offset_x = offsets[i]
+                local coord_x = pos.x
+                val = val + wavelength * cos((coord_x - offset_x) *invwavelength)
+
+                -- Z dimension
+                local offset_z = offsets[i + 1]
+                local coord_z = pos.z
+                val = val + wavelength * cos((coord_z - offset_z) *invwavelength)
+            end
+        elseif dims == 3 then
+            for i = 1, num_waves do
+                local wavelength = waves[i]
+                local invwavelength = inv_waves[i]
+
+                -- Rotate coordinates
+                pos = rotate_3d(pos, rotations3[i])
+
+                -- X dimension
+                local offset_x = offsets[i]
+                local coord_x = pos.x
+                val = val + wavelength * cos((coord_x - offset_x) *invwavelength)
+
+                -- Y dimension
+                local offset_y = offsets[i + 1]
+                local coord_y = pos.y
+                val = val + wavelength * cos((coord_y - offset_y) *invwavelength)
+
+                -- Z dimension
+                local offset_z = offsets[i + 2]
+                local coord_z = pos.z
+                val = val + wavelength * cos((coord_z - offset_z) *invwavelength)
+            end
         end
 
-        val = val / (max*dims)
+        val = val / (max * dims)
         return val
     end
+
     return noise
 end
 
